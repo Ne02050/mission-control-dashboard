@@ -97,7 +97,14 @@ export async function GET() {
       }
     }
 
-    // Add some common models if none found
+    // Add local Neo2050 primary model
+    models.add('ollama/glm-4.7-flash:latest');
+
+    // Add Grok API models (fallback only)
+    models.add('grok-4-1-fast-reasoning');
+    models.add('grok-beta');
+
+    // Add common other models
     if (models.size === 0) {
       models.add('anthropic/claude-sonnet-4-5');
       models.add('anthropic/claude-opus-4-5');
