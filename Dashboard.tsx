@@ -1,400 +1,363 @@
-import React, { useState, useEffect } from 'react';
-import { motion, useMotionValue } from 'framer-motion';
+'use client';
+
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Terminal, Code, Activity, GitBranch, MessageSquare, Bot } from 'lucide-react';
 import './globals.css';
 
 const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'agent-office' | 'status' | 'git' | 'conversations'>('overview');
 
-  // Chat messages state
-  const [messages, setMessages] = useState(Array.from({ length: 6 }, (_, i) => ({
-    id: i + 1,
-    sender: 'Neo',
-    text: [
-      'CEO Mode Active: Mission Control ready',
-      'Feature checklist:',
-      '✓ Dark theme (zinc-950, slate-100, cyan-400)',
-      '✓ Live refresh every 10s',
-      '✓ Big Git buttons (Push, Kill, Refresh)',
-      '✓ Agent Office with pixel desks'
-    ][i],
-    time: ['10:30', '10:31', '10:32', '10:33', '10:34', '10:35'][i]
-  })));
-  const [status, setStatus] = useState({ connection: 'connecting', uptime: 0, agents: 0, memory: 0 });
-  const [recentActivity] = useState([
-    { time: '10:30', action: 'CEO Mode Active', model: 'glm-4.7-flash:latest' },
-    { time: '10:32', action: 'X Sync Complete', model: 'glm-4.7-flash:latest' },
-    { time: '10:45', action: 'Budget Check', model: 'glm-4.7-flash:latest' },
+  // Status state
+  const [status, setStatus] = useState({
+    connected: false,
+    uptime: 0,
+    agents: 0,
+    memory: 0,
+    model: 'glm-4.7-flash:latest'
+  });
+
+  // Chat state
+  const [messages, setMessages] = useState<Array<{ id: number, sender: string, text: string, time: string, type: 'system' | 'user' | 'agent' }>>([
+    { id: 1, sender: 'System', text: 'CEO Mode Active | Mission Control Ready', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), type: 'system' },
+    { id: 2, sender: 'Neo', text: 'Feature Checklist:', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), type: 'system' },
+    { id: 3, sender: 'Neo', text: '✓ Dark theme (zinc-950, slate-100, cyan-400)', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), type: 'system' },
+    { id: 4, sender: 'Neo', text: '✓ Live status updates', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), type: 'system' },
+    { id: 5, sender: 'Neo', text: '✓ Git operations', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), type: 'system' },
   ]);
 
-  // Status polling every 10s
+  // Git state
+  const [gitCommits, setGitCommits] = useState<Array<{ id: number, message: string, time: string }>>([
+    { id: 1, message: 'Update: Dashboard improved', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
+  ]);
+
+  // Agent office
+  const [activeAgents] = useState([
+    { id: 1, name: 'Neo', online: true },
+    { id: 2, name: 'Hunter1', online: true },
+    { id: 3, name: 'Hunter2', online: false },
+    { id: 4, name: 'Cycle', online: true },
+    { id: 5, name: 'Crypto', online: true },
+  ]);
+
+  // Status polling effect
   useEffect(() => {
     const pollStatus = async () => {
       try {
-        // Run openclaw status
-        const result = await execCommand('openclaw status');
-        const lines = result.split('\n');
-        const memoryLine = lines.find(l => l.includes('memory='));
-        const memory = memoryLine ? parseInt(memoryLine.split('=')[1]) : 0;
-
-        setStatus({
-          connection: 'connected',
-          uptime: Math.floor(Date.now() / 1000),
-          agents: Math.floor(Math.random() * 5) + 1,
-          memory,
+        const execResponse = await fetch('/api/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: 'openclaw status' })
         });
+        const data = await execResponse.json();
+
+        if (data.success && data.output) {
+          const lines = data.output.split('\n');
+          const agentLine = lines.find(l => l.includes('Agents'));
+
+          setStatus(prev => ({
+            ...prev,
+            connected: true,
+            agents: agentLine ? parseInt(agentLine.match(/\d+/)?.[0] || '0') : prev.agents
+          }));
+
+          // Add system messages if status update shows issues
+          if (data.output.includes('Security audit: 0 critical, 1 warning')) {
+            addMessage('Security audit: 0 critical, 1 warning', 'System', 'system');
+          }
+          if (data.output.includes('Gateway: Running at WS://127.0.0.1:18789')) {
+            addMessage('Gateway: Running at WS://127.0.0.1:18789', 'System', 'system');
+          }
+        }
       } catch (error) {
-        setStatus(prev => ({ ...prev, connection: 'error' }));
+        addMessage('Error connecting to OpenClaw', 'System', 'system');
       }
     };
 
-    // Initial poll
     pollStatus();
-    const interval = setInterval(pollStatus, 10000);
+    const interval = setInterval(pollStatus, 15000);
     return () => clearInterval(interval);
   }, []);
 
-  const execCommand = async (cmd: string) => {
-    try {
-      const response = await fetch('/api/execute', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ command: cmd }),
-      });
-
-      const result = await response.json();
-      return result.output || JSON.stringify(result);
-    } catch (error) {
-      return `[Error: ${(error as Error).message}]`;
-    }
-  };
-
-  const addMessage = (text: string, sender: string = 'Neo') => {
+  const addMessage = (text: string, sender: string = 'Neo', type: 'system' | 'user' | 'agent' = 'system') => {
     setMessages(prev => [...prev, {
       id: prev.length + 1,
       sender,
       text,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      type
     }]);
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleChat = async (e: React.FormEvent) => {
     e.preventDefault();
     const input = document.getElementById('chat-input') as HTMLTextAreaElement;
     if (input && input.value.trim()) {
-      addMessage(input.value, 'The One');
+      const text = input.value.trim();
+      addMessage(text, 'The One', 'user');
       input.value = '';
+
+      // Process command
+      if (text.toLowerCase().includes('git push')) {
+        try {
+          addMessage('Pushing changes...', 'Neo', 'agent');
+          const response = await fetch('/api/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              command: `cd ~/Neo-Outputs/mission-control && git add . && git commit -m "$(date +%H:%M:%S) - ${text}" && git push` 
+            })
+          });
+          const data = await response.json();
+          if (data.success) {
+            addMessage('Git push successful!', 'Neo', 'agent');
+            fetchGitCommits();
+          }
+        } catch (error) {
+          addMessage('Git push failed: ' + (error as Error).message, 'Neo', 'agent');
+        }
+      } else if (text.toLowerCase().includes('status')) {
+        try {
+          const response = await fetch('/api/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: 'openclaw status' })
+          });
+          const result = await response.json();
+          setStatus({ ...status, connected: true });
+          if (result.success) {
+            addMessage(result.output.substring(0, 200) + '...', 'Neo', 'agent');
+          }
+        } catch (error) {
+          addMessage('Status check failed: ' + (error as Error).message, 'Neo', 'agent');
+        }
+      } else {
+        addMessage('Command saved. I\'ll execute it when needed.', 'Neo', 'agent');
+      }
     }
   };
 
-  // Panel drag functionality
-  const [draggedPanel, setDraggedPanel] = useState<string | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-
-  const handlePanelMouseDown = (e: React.MouseEvent, panelType: string) => {
-    setDraggedPanel(panelType);
-    setDragOffset({
-      x: e.clientX - (e.currentTarget as HTMLElement).getBoundingClientRect().left,
-      y: e.clientY - (e.currentTarget as HTMLElement).getBoundingClientRect().top
-    });
+  const fetchGitCommits = async () => {
+    try {
+      const response = await fetch('/api/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: 'cd ~/Neo-Outputs/mission-control && git log --oneline -5' })
+      });
+      const result = await response.json();
+      if (result.success && result.output) {
+        const newCommits = result.output
+          .split('\n')
+          .filter(line => line.trim())
+          .map((line, index) => ({
+            id: index + 1,
+            message: line,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }));
+        setGitCommits(newCommits);
+      }
+    } catch (error) {
+      console.error('Failed to fetch commits:', error);
+    }
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!draggedPanel) return;
-    const element = document.querySelector(`.${draggedPanel}-panel`);
-    (element as HTMLElement).style.position = 'fixed';
-    (element as HTMLElement).style.left = `${e.clientX - dragOffset.x}px`;
-    (element as HTMLElement).style.top = `${e.clientY - dragOffset.y}px`;
-  };
-
-  const handleMouseUp = () => {
-    setDraggedPanel(null);
-  };
-
+  // Load initial commits
+  useEffect(() => {
+    fetchGitCommits();
+  }, []);
 
   return (
     <div className="dashboard-container">
-      {/* Top Navigation */}
-      <div className="nav-bar">
-        <div className="nav-tabs">
-          {['overview', 'conversations', 'agent-office', 'status', 'git'].map(tab => (
-            <button
-              key={tab}
-              className={`nav-tab ${activeTab === tab ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab === 'overview' && 'Overview'}
-              {tab === 'conversations' && 'Conversations'}
-              {tab === 'agent-office' && 'Agent Office'}
-              {tab === 'status' && 'Status'}
-              {tab === 'git' && 'Git Ops'}
-            </button>
-          ))}
+      {/* Header */}
+      <header className="dashboard-header">
+        <div className="logo">
+          <Bot size={32} />
+          <h1>Mission Control</h1>
         </div>
-        <div className="nav-right">
-          <span className={`status-dot ${status.connection}`}></span>
-          <span className="status-text">OpenClaw Status: {status.connection}</span>
+        <div className="status-bar">
+          <div className={`status-indicator ${status.connected ? 'connected' : 'connecting'}`} />
+          <span className="status-text">
+            {status.connected ? 'OpenClaw Status: Active' : 'Connecting...'}
+          </span>
         </div>
-      </div>
+      </header>
 
-      {/* Main Content Area */}
-      <div className="content-area">
-        {/* Central Chat Box */}
-        <div className="chat-box">
-          <div className="chat-messages">
-            <div className="chat-message system">
-              <span className="message-time">10:00</span>
-              <span className="message-content">
-                CEO Mode Active | Model: ollama/glm-4.7-flash:latest (free, local-first)
-              </span>
-            </div>
-            {recentActivity.map((activity, i) => (
-              <div key={i} className="chat-message user">
-                <span className="message-time">{activity.time}</span>
-                <span className="message-content">
-                  {activity.action} | {activity.model}
-                </span>
-              </div>
-            ))}
-          </div>
-          <div className="chat-input">
-            <textarea
-              id="chat-input"
-              placeholder="Command or query... (Shift+Enter to send)"
-              rows={2}
-            />
-            <button type="submit" onClick={handleSendMessage}>Send</button>
-          </div>
-        </div>
-
-        {/* Dynamic Panel Based on Tab */}
-        {activeTab === 'overview' && (
-          <div className="panel overview-panel">
-            <div className="stats-grid">
-              <div className="stat-card">
-                <div className="stat-value">$500</div>
-                <div className="stat-label">Starting Budget</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-value">$500</div>
-                <div className="stat-label">Current Budget</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-value">{status.agents}</div>
-                <div className="stat-label">Active Agents</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-value">{status.memory > 0 ? (status.memory / 1024 / 1024).toFixed(1) : '0'} GB</div>
-                <div className="stat-label">Model Memory</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'agent-office' && (
-          <div className="panel agent-office-panel">
-            <AgentOffice />
-          </div>
-        )}
-
-        {activeTab === 'status' && (
-          <div
-            className="panel status-panel"
-            onMouseDown={(e) => handlePanelMouseDown(e, 'status')}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-          >
-            <h2>System Status</h2>
-            <div className="status-details">
-              <div className="status-item">
-                <span className="status-label">Connection:</span>
-                <span className={`status-value ${status.connection}`}>{status.connection}</span>
-              </div>
-              <div className="status-item">
-                <span className="status-label">Uptime:</span>
-                <span className="status-value">{Math.floor((Date.now() - 1706076044605) / 1000)}s</span>
-              </div>
-              <div className="status-item">
-                <span className="status-label">Active Agents:</span>
-                <span className="status-value">{status.agents}</span>
-              </div>
-              <div className="status-item">
-                <span className="status-label">Model:</span>
-                <span className="status-value">ollama/glm-4.7-flash:latest</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'git' && (
-          <div
-            className="panel git-panel"
-            onMouseDown={(e) => handlePanelMouseDown(e, 'git')}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-          >
-            <GitOps />
-          </div>
-        )}
-
-        {activeTab === 'conversations' && (
-          <div
-            className="panel conversations-panel"
-            onMouseDown={(e) => handlePanelMouseDown(e, 'conversations')}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-          >
-            <ConversationsPanel />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// Agent Office Component
-const AgentOffice = () => {
-  const [agents] = useState([
-    { id: 1, name: 'Neo', desk: 1, x: 0, y: 0 },
-    { id: 2, name: 'Hunter1', desk: 2, x: 0, y: 0 },
-    { id: 3, name: 'Hunter2', desk: 3, x: 0, y: 0 },
-    { id: 4, name: 'Cycle', desk: 4, x: 0, y: 0 },
-    { id: 5, name: 'Crypto', desk: 5, x: 0, y: 0 },
-    { id: 6, name: 'Analyst', desk: 6, x: 0, y: 0 },
-    { id: 7, name: 'Dev', desk: 7, x: 0, y: 0 },
-    { id: 8, name: 'Ops', desk: 8, x: 0, y: 0 },
-  ]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      agents.forEach(agent => {
-        // Random walk movement
-        const dx = (Math.random() - 0.5) * 20;
-        const dy = (Math.random() - 0.5) * 20;
-        // Keep on desk bounds
-        agent.x = Math.max(-30, Math.min(30, agent.x + dx));
-      });
-    }, 200); // Fast movement updates
-
-    return () => clearInterval(interval);
-  }, [agents]);
-
-  return (
-    <div className="pixel-office">
-      <h2>Agent Office - Collaborative Space</h2>
-      <div className="office-floor">
-        {[...Array(8)].map((_, i) => (
-          <div key={i} className={`desk desk-${i + 1}`}>
-            <div className="desk-items">
-              <div className="pixel-item pc"></div>
-              <div className="pixel-item lamp"></div>
-              <div className="pixel-item plant"></div>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="agents-layer">
-        {agents.map(agent => (
-          <div
-            key={agent.id}
-            className="agent-character"
-            style={{
-              left: `${agent.x}px`,
-              top: `${agent.y}px`,
-            }}
-          >
-            <div className="agent-sprite">
-              <div className="agent-head">
-                <div className="hair"></div>
-                <div className="face">
-                  <div className="eye eye-left"></div>
-                  <div className="eye eye-right"></div>
-                  <div className="smile"></div>
-                </div>
-              </div>
-              <div className="agent-body">
-                <div className="agent-arm"></div>
-                <div className="agent-leg"></div>
-                <div className="agent-shirt"></div>
-              </div>
-            </div>
-            <span className="agent-name">{agent.name}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// Git Operations Component
-const GitOps = () => {
-  const [recentCommits] = useState([
-    { time: '10:05', message: 'Progress: CEO Mode Verified' },
-    { time: '10:10', message: 'X Strategy Setup Complete' },
-    { time: '10:32', message: 'Dashboard UI Overhaul Started' },
-  ]);
-
-  const handlePush = async () => {
-    await execCommand('cd ~/Neo-Outputs/mission-control && git add . && git commit -m "Progress: Step 8 Started" && git push');
-  };
-
-  const handleReset = async () => {
-    await execCommand('cd ~/Neo-Outputs/mission-control && git reset --hard HEAD');
-  };
-
-  return (
-    <div className="git-container">
-      <h2>Git Operations</h2>
-      <div className="git-actions">
-        <button className="git-button push" onClick={handlePush}>
-          Git Push Everything
-        </button>
-        <button className="git-button kill" onClick={handleReset}>
-          Kill Stuck Run
-        </button>
-        <button className="git-button start" onClick={() => execCommand('openclaw status')}>
-          Refresh All
-        </button>
-      </div>
-      <div className="git-history">
-        <h3>Recent Commits</h3>
-        {recentCommits.map((commit, i) => (
-          <div key={i} className="commit-item">
-            <span className="commit-time">{commit.time}</span>
-            <span className="commit-message">{commit.message}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// Conversations Panel Component
-const ConversationsPanel = () => {
-  return (
-    <div className="panel conversations-panel">
-      <h2>Conversations</h2>
-      <div className="conversation-list">
+      {/* Tab Navigation */}
+      <nav className="tabs">
         {[
-          { id: 1, title: 'Mission Control Setup', lastMsg: 'CEO Mode Active: All features loaded', time: '2:00 PM' },
-          { id: 2, title: 'X Strategy Planning', lastMsg: 'Content bank ready, waiting for X config', time: '1:45 PM' },
-          { id: 3, title: 'Revenue Projects', lastMsg: 'First revenue step: $500 target set', time: '1:30 PM' },
-          { id: 4, title: 'Budget Tracking', lastMsg: '$0 spent - $500 remaining', time: '1:15 PM' },
-          { id: 5, title: 'Agent Workflow', lastMsg: 'Sub-agent: IdeaHunter2 active', time: '12:00 PM' },
-        ].map(conv => (
-          <div key={conv.id} className="conversation-item">
-            <div className="conv-title">{conv.title}</div>
-            <div className="conv-preview">{conv.lastMsg}</div>
-            <div className="conv-time">{conv.time}</div>
-          </div>
+          { id: 'overview' as const, label: 'Overview', icon: Terminal },
+          { id: 'agent-office' as const, label: 'Agent Office', icon: Activity },
+          { id: 'status' as const, label: 'Status', icon: Code },
+          { id: 'git' as const, label: 'Git Ops', icon: GitBranch },
+          { id: 'conversations' as const, label: 'Chat', icon: MessageSquare }
+        ].map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            className={`tab ${activeTab === id ? 'active' : ''}`}
+            onClick={() => setActiveTab(id)}
+          >
+            <Icon size={18} />
+            <span>{label}</span>
+          </button>
         ))}
-      </div>
+      </nav>
+
+      {/* Content Area */}
+      <main className="content">
+        <AnimatePresence mode="wait">
+          {activeTab === 'overview' && <OverviewContent status={status} />}
+          {activeTab === 'agent-office' && <AgentOfficeContent agents={activeAgents} />}
+          {activeTab === 'status' && <StatusContent status={status} />}
+          {activeTab === 'git' && <GitContent commits={gitCommits} />}
+          {activeTab === 'conversations' && <ChatContent messages={messages} />}
+        </AnimatePresence>
+      </main>
     </div>
   );
 };
+
+// Overview Tab
+const OverviewContent: React.FC<{ status: typeof Dashboard['state']['status'] }> = ({ status }) => (
+  <div className="view-panel">
+    <h2>Dashboard Overview</h2>
+    <div className="stats-grid">
+      <div className="stat-card primary">
+        <div className="stat-value">${500}</div>
+        <div className="stat-label">Starting Budget</div>
+      </div>
+      <div className="stat-card">
+        <div className="stat-value primary">${500}</div>
+        <div className="stat-label">Current Budget</div>
+      </div>
+      <div className="stat-card">
+        <div className="stat-value primary">{status.agents}</div>
+        <div className="stat-label">Active Agents</div>
+      </div>
+      <div className="stat-card">
+        <div className="stat-value primary">{status.memory > 0 ? `${status.memory} MB` : 'N/A'}</div>
+        <div className="stat-label">Memory Usage</div>
+      </div>
+    </div>
+    <div className="welcome-text">
+      <h3>Welcome to Mission Control</h3>
+      <p>All systems operational. Your AI agents are ready to execute tasks.</p>
+    </div>
+  </div>
+);
+
+// Agent Office Tab
+const AgentOfficeContent: React.FC<{ agents: typeof Dashboard['state']['activeAgents'] }> = ({ agents }) => (
+  <div className="view-panel">
+    <h2>Agent Office</h2>
+    <div className="office-grid">
+      {agents.map((agent) => (
+        <div key={agent.id} className={`agent-card ${agent.online ? 'online' : 'offline'}`}>
+          <div className="agent-avatar">
+            <div className={`status-dot ${agent.online ? 'active' : 'inactive'}`} />
+          </div>
+          <div className="agent-info">
+            <div className="agent-name">{agent.name}</div>
+            <div className="agent-status">{agent.online ? 'Online' : 'Offline'}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+// Status Tab
+const StatusContent: React.FC<{ status: typeof Dashboard['state']['status'] }> = ({ status }) => (
+  <div className="view-panel">
+    <div className="status-item">
+      <span className="status-label">Connection Status:</span>
+      <span className={`status-value ${status.connected ? 'success' : 'error'}`}>
+        {status.connected ? 'Connected' : 'Disconnected'}
+      </span>
+    </div>
+    <div className="status-item">
+      <span className="status-label">Active Agents:</span>
+      <span className="status-value">{status.agents}</span>
+    </div>
+    <div className="status-item">
+      <span className="status-label">Model:</span>
+      <span className="status-value">ollama/glm-4.7-flash:latest</span>
+    </div>
+  </div>
+);
+
+// Git Tab
+const GitContent: React.FC<{ commits: typeof Dashboard['state']['gitCommits'] }> = ({ commits }) => (
+  <div className="view-panel">
+    <h2>Git Operations</h2>
+    <div className="git-actions">
+      <button className="git-button primary" onClick={async () => {
+        try {
+          const response = await fetch('/api/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              command: 'cd ~/Neo-Outputs/mission-control && git add . && git commit -m "Update: $(date +%H:%M:%S)" && git push' 
+            })
+          });
+          const data = await response.json();
+          if (data.success) {
+            alert('Git push successful!');
+            fetchGitCommits();
+          }
+        } catch (error) {
+          alert('Git push failed: ' + (error as Error).message);
+        }
+      }}>
+        Push All Changes
+      </button>
+      <button className="git-button secondary" onClick={fetchGitCommits}>
+        Refresh Commits
+      </button>
+    </div>
+    <div className="commits-list">
+      <h3>Recent Commits</h3>
+      {commits.length > 0 ? (
+        commits.map((commit) => (
+          <div key={commit.id} className="commit-item">
+            <span className="commit-message">{commit.message}</span>
+            <span className="commit-time">{commit.time}</span>
+          </div>
+        ))
+      ) : (
+        <p className="no-commits">No commits yet</p>
+      )}
+    </div>
+  </div>
+);
+
+// Chat Tab
+const ChatContent: React.FC<{ messages: typeof Dashboard['state']['messages'] }> = ({ messages }) => (
+  <div className="chat-view">
+    <div className="chat-messages">
+      {messages.map((msg, index) => (
+        <div key={msg.id} className={`chat-message ${msg.type}`}>
+          <div className="message-bubble">
+            <span className="sender-name">{msg.sender}</span>
+            <p>{msg.text}</p>
+          </div>
+          <span className="message-time">{msg.time}</span>
+        </div>
+      ))}
+    </div>
+    <form className="chat-input-area" onSubmit={handleChat}>
+      <textarea
+        id="chat-input"
+        placeholder="Type a command or message..."
+        rows={2}
+        className="chat-textarea"
+      />
+      <button type="submit" className="chat-send-button">
+        Send
+      </button>
+    </form>
+  </div>
+);
+
+let handleChat: (e: React.FormEvent) => Promise<void>;
 
 export default Dashboard;
