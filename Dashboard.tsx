@@ -54,11 +54,20 @@ const Dashboard: React.FC = () => {
   }, []);
 
   const execCommand = async (cmd: string) => {
-    return new Promise<string>((resolve) => {
-      exec(cmd, { workdir: '/Users/neo2050/.openclaw' }, (output) => {
-        resolve(output);
+    try {
+      const response = await fetch('/api/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ command: cmd }),
       });
-    });
+
+      const result = await response.json();
+      return result.output || JSON.stringify(result);
+    } catch (error) {
+      return `[Error: ${(error as Error).message}]`;
+    }
   };
 
   const addMessage = (text: string, sender: string = 'Neo') => {
@@ -387,21 +396,5 @@ const ConversationsPanel = () => {
     </div>
   );
 };
-
-if (typeof window !== 'undefined') {
-  window.exec = async (cmd: string, workdir: string, callback: (output: string) => void) => {
-    // Browser-compatible exec - fetch uses WebAssembly or simply logs message
-    if (typeof window !== 'undefined' && window.fetch) {
-      try {
-        // Using browser's fetch to simulate exec - in production, this would call backend API
-        callback('[BROWSER MODE] Execute commands via backend API.\n\nCommand: ' + cmd + '\nWorkdir: ' + workdir + '\n\nNote: Full command execution requires Node.js backend.');
-      } catch (e) {
-        callback('Error: ' + (e as Error).message);
-      }
-    } else {
-      callback('[BROWSER MODE] Command execution not available in this environment.');
-    }
-  };
-}
 
 export default Dashboard;
