@@ -1,8 +1,24 @@
 import React, { useState, useEffect } from 'react';
+import { motion, useMotionValue } from 'framer-motion';
 import './globals.css';
 
 const Dashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'agent-office' | 'status' | 'git'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'agent-office' | 'status' | 'git' | 'conversations'>('overview');
+
+  // Chat messages state
+  const [messages, setMessages] = useState(Array.from({ length: 6 }, (_, i) => ({
+    id: i + 1,
+    sender: 'Neo',
+    text: [
+      'CEO Mode Active: Mission Control ready',
+      'Feature checklist:',
+      '✓ Dark theme (zinc-950, slate-100, cyan-400)',
+      '✓ Live refresh every 10s',
+      '✓ Big Git buttons (Push, Kill, Refresh)',
+      '✓ Agent Office with pixel desks'
+    ][i],
+    time: ['10:30', '10:31', '10:32', '10:33', '10:34', '10:35'][i]
+  })));
   const [status, setStatus] = useState({ connection: 'connecting', uptime: 0, agents: 0, memory: 0 });
   const [recentActivity] = useState([
     { time: '10:30', action: 'CEO Mode Active', model: 'glm-4.7-flash:latest' },
@@ -45,18 +61,62 @@ const Dashboard: React.FC = () => {
     });
   };
 
+  const addMessage = (text: string, sender: string = 'Neo') => {
+    setMessages(prev => [...prev, {
+      id: prev.length + 1,
+      sender,
+      text,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }]);
+  };
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    const input = document.getElementById('chat-input') as HTMLTextAreaElement;
+    if (input && input.value.trim()) {
+      addMessage(input.value, 'The One');
+      input.value = '';
+    }
+  };
+
+  // Panel drag functionality
+  const [draggedPanel, setDraggedPanel] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  const handlePanelMouseDown = (e: React.MouseEvent, panelType: string) => {
+    setDraggedPanel(panelType);
+    setDragOffset({
+      x: e.clientX - (e.currentTarget as HTMLElement).getBoundingClientRect().left,
+      y: e.clientY - (e.currentTarget as HTMLElement).getBoundingClientRect().top
+    });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!draggedPanel) return;
+    const element = document.querySelector(`.${draggedPanel}-panel`);
+    (element as HTMLElement).style.position = 'fixed';
+    (element as HTMLElement).style.left = `${e.clientX - dragOffset.x}px`;
+    (element as HTMLElement).style.top = `${e.clientY - dragOffset.y}px`;
+  };
+
+  const handleMouseUp = () => {
+    setDraggedPanel(null);
+  };
+
+
   return (
     <div className="dashboard-container">
       {/* Top Navigation */}
       <div className="nav-bar">
         <div className="nav-tabs">
-          {['overview', 'agent-office', 'status', 'git'].map(tab => (
+          {['overview', 'conversations', 'agent-office', 'status', 'git'].map(tab => (
             <button
               key={tab}
               className={`nav-tab ${activeTab === tab ? 'active' : ''}`}
               onClick={() => setActiveTab(tab)}
             >
               {tab === 'overview' && 'Overview'}
+              {tab === 'conversations' && 'Conversations'}
               {tab === 'agent-office' && 'Agent Office'}
               {tab === 'status' && 'Status'}
               {tab === 'git' && 'Git Ops'}
@@ -90,11 +150,12 @@ const Dashboard: React.FC = () => {
             ))}
           </div>
           <div className="chat-input">
-            <input
-              type="text"
-              placeholder="Command or query..."
+            <textarea
+              id="chat-input"
+              placeholder="Command or query... (Shift+Enter to send)"
+              rows={2}
             />
-            <button>Send</button>
+            <button type="submit" onClick={handleSendMessage}>Send</button>
           </div>
         </div>
 
@@ -129,7 +190,13 @@ const Dashboard: React.FC = () => {
         )}
 
         {activeTab === 'status' && (
-          <div className="panel status-panel">
+          <div
+            className="panel status-panel"
+            onMouseDown={(e) => handlePanelMouseDown(e, 'status')}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+          >
             <h2>System Status</h2>
             <div className="status-details">
               <div className="status-item">
@@ -153,8 +220,26 @@ const Dashboard: React.FC = () => {
         )}
 
         {activeTab === 'git' && (
-          <div className="panel git-panel">
+          <div
+            className="panel git-panel"
+            onMouseDown={(e) => handlePanelMouseDown(e, 'git')}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+          >
             <GitOps />
+          </div>
+        )}
+
+        {activeTab === 'conversations' && (
+          <div
+            className="panel conversations-panel"
+            onMouseDown={(e) => handlePanelMouseDown(e, 'conversations')}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+          >
+            <ConversationsPanel />
           </div>
         )}
       </div>
@@ -279,12 +364,43 @@ const GitOps = () => {
   );
 };
 
+// Conversations Panel Component
+const ConversationsPanel = () => {
+  return (
+    <div className="panel conversations-panel">
+      <h2>Conversations</h2>
+      <div className="conversation-list">
+        {[
+          { id: 1, title: 'Mission Control Setup', lastMsg: 'CEO Mode Active: All features loaded', time: '2:00 PM' },
+          { id: 2, title: 'X Strategy Planning', lastMsg: 'Content bank ready, waiting for X config', time: '1:45 PM' },
+          { id: 3, title: 'Revenue Projects', lastMsg: 'First revenue step: $500 target set', time: '1:30 PM' },
+          { id: 4, title: 'Budget Tracking', lastMsg: '$0 spent - $500 remaining', time: '1:15 PM' },
+          { id: 5, title: 'Agent Workflow', lastMsg: 'Sub-agent: IdeaHunter2 active', time: '12:00 PM' },
+        ].map(conv => (
+          <div key={conv.id} className="conversation-item">
+            <div className="conv-title">{conv.title}</div>
+            <div className="conv-preview">{conv.lastMsg}</div>
+            <div className="conv-time">{conv.time}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 if (typeof window !== 'undefined') {
   window.exec = async (cmd: string, workdir: string, callback: (output: string) => void) => {
-    const { exec } = require('child_process');
-    exec(cmd, { cwd: workdir }, (error: any, stdout: any, stderr: any) => {
-      callback(stdout || stderr);
-    });
+    // Browser-compatible exec - fetch uses WebAssembly or simply logs message
+    if (typeof window !== 'undefined' && window.fetch) {
+      try {
+        // Using browser's fetch to simulate exec - in production, this would call backend API
+        callback('[BROWSER MODE] Execute commands via backend API.\n\nCommand: ' + cmd + '\nWorkdir: ' + workdir + '\n\nNote: Full command execution requires Node.js backend.');
+      } catch (e) {
+        callback('Error: ' + (e as Error).message);
+      }
+    } else {
+      callback('[BROWSER MODE] Command execution not available in this environment.');
+    }
   };
 }
 

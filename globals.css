@@ -429,6 +429,112 @@ body {
   text-shadow: 1px 1px 0 var(--bg-primary);
 }
 
+/* Conversations Panel */
+.conversations-panel {
+  background: var(--bg-secondary);
+  padding: 2rem;
+  border-radius: 0.75rem;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.conversations-panel h2 {
+  margin-bottom: 1.5rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.conversation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.conversation-item {
+  background: var(--bg-tertiary);
+  padding: 1rem;
+  border-radius: 0.5rem;
+  transition: opacity 0.2s;
+}
+
+.conversation-item:hover {
+  opacity: 0.9;
+  background: var(--bg-tertiary);
+}
+
+.conv-title {
+  color: var(--text-primary);
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.conv-preview {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.conv-time {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+/* Central Chat Input */
+.chat-input {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.chat-input input,
+.chat-input textarea {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.875rem;
+  resize: none;
+  outline: none;
+}
+
+.chat-input input:focus,
+.chat-input textarea:focus {
+  border-color: var(--accent);
+}
+
+.chat-input button {
+  padding: 0 1.5rem;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.chat-input button:hover {
+  opacity: 0.9;
+}
+
+/* Draggable Panel Base Style */
+.panel {
+  background: var(--bg-secondary);
+  padding: 2rem;
+  border-radius: 0.75rem;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  overflow-y: auto;
+}
+
 /* Git Operations */
 .git-container {
   background: var(--bg-secondary);
